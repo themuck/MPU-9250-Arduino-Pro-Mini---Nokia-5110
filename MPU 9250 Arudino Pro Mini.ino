@@ -256,7 +256,7 @@ float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
 #define Ki 0.0f
-#define update_display 250
+#define update_display 500
 
 uint32_t delt_t = 0; // used to control display output rate
 uint32_t count = 0, sumCount = 0; // used to control display output rate
@@ -273,7 +273,7 @@ float heading;
 void setup()
 {
   Wire.begin();
-  //TWBR = 12;  // 400 kbit/sec I2C speed
+  TWBR = 12;  // 400 kbit/sec I2C speed
   // Set up the interrupt pin, its set as active high, push-pull
   pinMode(intPin, INPUT);
   digitalWrite(intPin, LOW);
@@ -374,8 +374,7 @@ void loop()
   // If intPin goes high, all data registers have new data
   if (readByte(MPU9250_ADDRESS, INT_STATUS) & 0x01) {  // On interrupt, check if data ready interrupt
 	  
-	tempCount = readTempData();  // Read the adc values
-	temperature = ((float) tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade
+
 	  
     readAccelData(accelCount);  // Read the x/y/z adc values
     getAres();
@@ -434,11 +433,14 @@ void loop()
   // https://forum.pjrc.com/threads/25637-quaternian-is-changing-very-very-slowly
   
     MadgwickQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
-  //MahonyQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
+   // MahonyQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
 
     if (!AHRS) {
     delt_t = millis() - count;
     if(delt_t > update_display) {
+		
+			tempCount = readTempData();  // Read the adc values
+			temperature = ((float) tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade
     
     display.clearDisplay();     
     display.setCursor(0, 0); display.print("MPU9250/AK8963");
@@ -458,9 +460,10 @@ void loop()
     display.setCursor(24, 32); display.print((int)(my)); 
     display.setCursor(48, 32); display.print((int)(mz)); 
     display.setCursor(72, 32); display.print("mG");   
-   
+	
+	
     display.setCursor(0,  40); display.print("Gyro T "); 
-    display.setCursor(50,  40); display.print(temperature, 1); display.print(" C");
+	display.setCursor(50,  40); display.print(temperature, 1); display.print(" C");
     display.display();
     
     count = millis();
@@ -474,7 +477,8 @@ void loop()
     if (delt_t > update_display) 
 	{ // update LCD once per half-second independent of read rate
 
-           
+           	tempCount = readTempData();  // Read the adc values
+           	temperature = ((float) tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade
     
   // Define output variables from updated quaternion---these are Tait-Bryan angles, commonly used in aircraft orientation.
   // In this coordinate system, the positive z-axis is down toward Earth. 
@@ -539,6 +543,11 @@ void loop()
 	display.setCursor(30, 8); display.print((int) pitch);
 	display.setCursor(30, 16); display.print((int) roll);
 	display.setCursor(30, 24); display.print("ypr");
+	
+	display.setCursor(60,  0); display.print((int)magbias[0]);
+	display.setCursor(60, 8); display.print((int) magbias[1]);
+	display.setCursor(60, 16); display.print((int)magbias[2]);
+	display.setCursor(60, 24); display.print("mbi");
 		
 	display.setCursor(0, 40);  display.print(temperature, 1); display.print("C");
 	display.setCursor(36, 40); display.print((float) sumCount / sum, 2); display.print("Hz");
