@@ -1,4 +1,4 @@
-/* MPU9250 Basic Example Code yaw issue!!!
+/* MPU9250 Basic Example Code
  by: Kris Winer
  date: April 1, 2014
  license: Beerware - Use this code however you'd like. If you 
@@ -25,6 +25,7 @@
  We have disabled the internal pull-ups used by the Wire library in the Wire.h/twi.c utility file.
  We are also using the 400 kHz fast I2C mode by setting the TWI_FREQ  to 400000L /twi.h utility file.
  */
+#include <math.h>
 #include <SPI.h>
 #include <Wire.h>   
 #include <Adafruit_GFX.h>
@@ -241,7 +242,7 @@ int16_t tempCount;      // temperature raw count output
 float   temperature;    // Stores the real internal chip temperature in degrees Celsius
 float   SelfTest[6];    // holds results of gyro and accelerometer self test
 
-// global constants for 9 DoF fusion and AHRS (Attitude and Heading Reference System)
+
 float GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
 float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 // There is a tradeoff in the beta parameter between accuracy and response speed.
@@ -249,13 +250,14 @@ float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in
 // However, with this value, the LSM9SD0 response time is about 10 seconds to a stable initial quaternion.
 // Subsequent changes also require a longish lag time to a stable output, not fast enough for a quadcopter or robot car!
 // By increasing beta (GyroMeasError) by about a factor of fifteen, the response time constant is reduced to ~2 sec
-// I haven't noticed any reduction in solution accuracy. This is essentially the I coefficient in a PID control sense; 
-// the bigger the feedback coefficient, the faster the solution converges, usually at the expense of accuracy. 
+// I haven't noticed any reduction in solution accuracy. This is essentially the I coefficient in a PID control sense;
+// the bigger the feedback coefficient, the faster the solution converges, usually at the expense of accuracy.
 // In any case, this is the free parameter in the Madgwick filtering and fusion scheme.
 float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
 float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
-#define Ki 0.0f
+#define Ki 0.1f
+
 #define update_display 500
 
 uint32_t delt_t = 0; // used to control display output rate
@@ -407,13 +409,16 @@ void loop()
 	// set offset value to shift in the middle (max. + min.) / 2 
     magbias[0] = ((magbias_max[0] + magbias_min[0])/2);  // User environmental x-axis correction in milliGauss, should be automatically calculated
     magbias[1] = ((magbias_max[1] + magbias_min[1])/2);  // User environmental x-axis correction in milliGauss
-    magbias[2] = ((magbias_max[2] + magbias_min[2])/2);  // User environmental x-axis correction in milliGauss
+    magbias[2] = ((magbias_max[2] + magbias_min[2])/2);  // User environmental x-axis correction in milliGauss 
+	
     
     // Calculate the magnetometer values in milliGauss
-    // Include factory calibration per data sheet and user environmental corrections
+   // Include factory calibration per data sheet and user environmental corrections
     mx = (float)(magCount[0]- magbias[0])*mRes*magCalibration[0] ;  // get actual magnetometer value, this depends on scale being set
     my = (float)(magCount[1]- magbias[1])*mRes*magCalibration[1] ;  
     mz = (float)(magCount[2]- magbias[2])*mRes*magCalibration[2] ;   
+	
+	
   }
   
   Now = micros();
@@ -431,10 +436,10 @@ void loop()
   // Pass gyro rate as rad/s
   
   // https://forum.pjrc.com/threads/25637-quaternian-is-changing-very-very-slowly
-  
-    MadgwickQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
-   // MahonyQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
-
+   //MadgwickQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
+    MadgwickQuaternionUpdate(ax, ay, -az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  my,  mx, mz); // change mx & my, and negate az to have all axes in one direction!!!
+   //MahonyQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  mx,  my, mz);
+   //MahonyQuaternionUpdate(ax, ay, -az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  my,  mx, mz); // change mx & my, and negate az to have all axes in one direction!!!
     if (!AHRS) {
     delt_t = millis() - count;
     if(delt_t > update_display) {
@@ -494,10 +499,16 @@ void loop()
    roll  = atan2(2.0f * (q[0] * q[1] + q[2] * q[3]), q[0] * q[0] - q[1] * q[1] - q[2] * q[2] + q[3] * q[3]);
    pitch *= 180.0f / PI;
    yaw   *= 180.0f / PI; 
- //yaw   -= 13.8; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
+   //yaw   -= 13.8; // Declination at Danville, California is 13 degrees 48 minutes and 47 seconds on 2014-04-04
    roll  *= 180.0f / PI;
       
-    
+	heading = yaw;
+	if (heading > 180)
+	heading -= 360;
+	if (heading <  0)
+	heading += 360;
+	  
+   
     display.clearDisplay();     
     /* display.setCursor(0, 0); display.print(" x   y   z  ");
 
@@ -544,10 +555,12 @@ void loop()
 	display.setCursor(30, 16); display.print((int) roll);
 	display.setCursor(30, 24); display.print("ypr");
 	
-	display.setCursor(60,  0); display.print((int)magbias[0]);
+	/*display.setCursor(60,  0); display.print((int)magbias[0]);
 	display.setCursor(60, 8); display.print((int) magbias[1]);
 	display.setCursor(60, 16); display.print((int)magbias[2]);
-	display.setCursor(60, 24); display.print("mbi");
+	display.setCursor(60, 24); display.print("mbi");*/
+	
+	display.setCursor(30, 32); display.print((float)heading,1);	
 		
 	display.setCursor(0, 40);  display.print(temperature, 1); display.print("C");
 	display.setCursor(36, 40); display.print((float) sumCount / sum, 2); display.print("Hz");
